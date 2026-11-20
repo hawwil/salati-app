@@ -24,18 +24,22 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.9'
+          gradle-version: '8.11.1'
 
       - name: Build
         working-directory: src
-        run: gradle assembleRelease --no-daemon
+        run: gradle assembleRelease bundleRelease --no-daemon
 
       - name: Rename
-        run: cp src/app/build/outputs/apk/release/app-release.apk Salati.apk
+        run: |
+          cp src/app/build/outputs/apk/release/app-release.apk Salati.apk
+          cp src/app/build/outputs/bundle/release/app-release.aab Salati.aab
 
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ github.run_number }}
           name: صلاتي ${{ github.run_number }}
-          files: Salati.apk
+          files: |
+            Salati.apk
+            Salati.aab
           make_latest: true
