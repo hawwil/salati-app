@@ -67,15 +67,19 @@ public class MainActivity extends Activity {
         } catch (Exception ignored) { }
 
         String crash = readCrash();
+        if (crash != null) { safeScreen(crash); return; }
+        start();
+    }
+
+    private void start() {
         try {
             web = new WebView(this);
         } catch (Throwable t) {
             fallback("لا يمكن تشغيل صلاتي على هذا الجهاز لأن مكوّن «Android System WebView» غير مثبّت أو معطّل.\n\n"
                     + "فعّله أو حدّثه من: الإعدادات ← التطبيقات ← Android System WebView، ثم افتح صلاتي من جديد.",
-                    stack(t) + (crash == null ? "" : "\n\n---\n" + crash));
+                    stack(t));
             return;
         }
-        if (crash != null) main.postDelayed(() -> crashDialog(crash), 1500);
         web.setBackgroundColor(Color.parseColor(dark() ? "#0A0F1A" : "#F3F4F7"));
         web.setOverScrollMode(View.OVER_SCROLL_NEVER);
         WebSettings s = web.getSettings();
@@ -91,6 +95,17 @@ public class MainActivity extends Activity {
             @Override
             public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
                 return serve(request.getUrl());
+            }
+
+            @Override
+            public boolean onRenderProcessGone(WebView view, android.webkit.RenderProcessGoneDetail d) {
+                // the page's process died (not our code): keep the app alive, remember why, and show it next time
+                saveReport("WebView renderer gone · didCrash=" + (Build.VERSION.SDK_INT >= 26 && d != null && d.didCrash())
+                        + " · priority=" + (Build.VERSION.SDK_INT >= 26 && d != null ? d.rendererPriorityAtExit() : -1));
+                try { if (web != null) { ((android.view.ViewGroup) web.getParent()).removeView(web); web.destroy(); } } catch (Throwable ignored) { }
+                web = null;
+                main.post(() -> safeScreen(readCrash()));
+                return true;
             }
 
             @Override
@@ -160,6 +175,67 @@ public class MainActivity extends Activity {
             byte[] b = new byte[(int) Math.min(f.length(), 20000)];
             try (java.io.FileInputStream in = new java.io.FileInputStream(f)) { int n = in.read(b); f.delete(); return new String(b, 0, Math.max(n, 0), "UTF-8"); }
         } catch (Throwable t) { return null; }
+    }
+
+    static String webViewInfo() {
+        try {
+            if (Build.VERSION.SDK_INT >= 26) {
+                android.content.pm.PackageInfo p = WebView.getCurrentWebViewPackage();
+                if (p != null) return p.packageName + " " + p.versionName;
+            }
+        } catch (Throwable ignored) { }
+        return "?";
+    }
+
+    private void saveReport(String what) {
+        try {
+            String v = "?";
+            try { v = getPackageManager().getPackageInfo(getPackageName(), 0).versionName; } catch (Throwable ignored) { }
+            String info = "صلاتي " + v + " · " + Build.MANUFACTURER + " " + Build.MODEL + " · Android " + Build.VERSION.RELEASE
+                    + " (API " + Build.VERSION.SDK_INT + ")\nWebView: " + webViewInfo() + "\n\n" + what;
+            try (java.io.FileOutputStream o = new java.io.FileOutputStream(new java.io.File(getFilesDir(), App.CRASH))) { o.write(info.getBytes("UTF-8")); }
+        } catch (Throwable ignored) { }
+    }
+
+    /** shown instead of the app right after a crash: lets the user send us the report, then carry on */
+    private void safeScreen(String report) {
+        if (report == null) report = "";
+        final String rep = report;
+        android.widget.LinearLayout l = new android.widget.LinearLayout(this);
+        l.setOrientation(android.widget.LinearLayout.VERTICAL);
+        l.setGravity(android.view.Gravity.CENTER);
+        int p = (int) (24 * getResources().getDisplayMetrics().density);
+        l.setPadding(p, p, p, p);
+        l.setBackgroundColor(Color.parseColor("#13294B"));
+        android.widget.TextView tv = new android.widget.TextView(this);
+        tv.setText("توقّف صلاتي في المرة السابقة.\nنعتذر عن ذلك. أرسل التقرير إلى المطوّر ليصلح المشكلة، ثم افتح التطبيق.");
+        tv.setTextColor(Color.WHITE);
+        tv.setTextSize(17);
+        tv.setGravity(android.view.Gravity.CENTER);
+        l.addView(tv);
+        android.widget.Button b = new android.widget.Button(this);
+        b.setText("إرسال التقرير إلى المطوّر");
+        b.setOnClickListener(v -> shareReport(rep));
+        android.widget.LinearLayout.LayoutParams lp = new android.widget.LinearLayout.LayoutParams(-2, -2);
+        lp.topMargin = p;
+        l.addView(b, lp);
+        android.widget.Button go = new android.widget.Button(this);
+        go.setText("افتح التطبيق");
+        go.setOnClickListener(v -> start());
+        l.addView(go, new android.widget.LinearLayout.LayoutParams(-2, -2));
+        android.widget.TextView small = new android.widget.TextView(this);
+        small.setText(rep.length() > 600 ? rep.substring(0, 600) + "…" : rep);
+        small.setTextColor(Color.parseColor("#B3FFFFFF"));
+        small.setTextSize(11);
+        small.setTextIsSelectable(true);
+        android.widget.LinearLayout.LayoutParams lp2 = new android.widget.LinearLayout.LayoutParams(-1, -2);
+        lp2.topMargin = p;
+        l.addView(small, lp2);
+        android.widget.ScrollView sv = new android.widget.ScrollView(this);
+        sv.setFillViewport(true);
+        sv.setBackgroundColor(Color.parseColor("#13294B"));
+        sv.addView(l);
+        setContentView(sv);
     }
 
     private static String stack(Throwable t) {

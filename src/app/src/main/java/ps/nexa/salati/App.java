@@ -21,6 +21,7 @@ public class App extends Application {
                 e.printStackTrace(new PrintWriter(sw));
                 String info = "صلاتي " + versionName() + " · " + Build.MANUFACTURER + " " + Build.MODEL
                         + " · Android " + Build.VERSION.RELEASE + " (API " + Build.VERSION.SDK_INT + ")\n"
+                        + "WebView: " + MainActivity.webViewInfo() + "\n"
                         + "thread: " + t.getName() + "\n\n" + sw;
                 try (FileOutputStream o = new FileOutputStream(new File(getFilesDir(), CRASH))) {
                     o.write(info.getBytes("UTF-8"));
