@@ -1,0 +1,38 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'ps.nexa.salati'
+    compileSdk 36
+
+    defaultConfig {
+        applicationId "ps.nexa.salati"
+        minSdk 24
+        targetSdk 36
+        versionCode 25
+        versionName "2.3.2"
+    }
+
+    signingConfigs {
+        release {
+            storeFile rootProject.file("salati.jks")
+            storePassword "f404218effda5c3820281b23"
+            keyAlias "salati"
+            keyPassword "f404218effda5c3820281b23"
+            storeType "pkcs12"
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
