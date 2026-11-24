@@ -260,6 +260,7 @@ body.hasplayer .toast{bottom:calc(190px + env(safe-area-inset-bottom))}
 .zk .au svg{width:20px;height:20px}
 .listen{width:100%;display:flex;align-items:center;justify-content:center;gap:8px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:11px;font-weight:700;color:var(--green);margin-bottom:14px}
 .listen svg{width:20px;height:20px}
+.lwrap[hidden]{display:none!important}
 .lwrap{text-align:center;margin:2px 0 14px}.reader .lwrap{flex:none;margin:0;padding:10px 0;background:var(--bg);border-bottom:1px solid var(--line)}
 .lpill{display:inline-block;background:var(--card);border:1px solid var(--line);background:color-mix(in srgb,var(--green) 10%,var(--card));color:var(--green);border:1px solid color-mix(in srgb,var(--green) 22%,transparent);border-radius:999px;padding:8px 22px;font-size:14.5px;font-weight:700;transition:all .2s}
 .lpill.on{background:var(--goldbg);color:var(--gold);border-color:var(--gold);border-color:color-mix(in srgb,var(--gold) 35%,transparent)}
@@ -863,11 +864,11 @@ async function playQuran(su,a){
 }
 function qHere(){return audioActive()&&AU.mode==="quran"&&RD&&+AU.s===RD.s}
 function aHere(){return audioActive()&&AU.mode==="list"&&AZ&&AU.key&&AU.key.startsWith(AZ.typ+":")}
-function rListenToggle(){if(qHere())A.audioCmd("stop");else playFromTop();setTimeout(listenState,60)}
-function aListenToggle(){if(aHere())A.audioCmd("stop");else aPlayAll();setTimeout(listenState,60)}
+function rListenToggle(){playFromTop();setTimeout(listenState,60)}
+function aListenToggle(){aPlayAll();setTimeout(listenState,60)}
 function listenState(){const r=$("rListen"),a=$("aListen");
- if(r){const on=qHere();r.classList.toggle("on",on);r.textContent=on?"إيقاف الاستماع":"استمع إلى السورة"}
- if(a){const on=aHere();a.classList.toggle("on",on);a.textContent=on?"إيقاف الاستماع":"استمع إلى الأذكار"}}
+ if(r)r.parentNode.hidden=qHere();
+ if(a)a.parentNode.hidden=aHere();}
 function playFromTop(){if(!RD)return;const a=rTop();playQuran(RD.s,a>1?a:1)}
 async function aItems(){
  const Z=await getJSON("adhkar.json");const typ=AZ?AZ.typ:autoType();const list=Z[typ];const items=[];
