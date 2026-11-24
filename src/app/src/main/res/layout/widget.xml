@@ -17,7 +17,7 @@
             android:orientation="horizontal" android:gravity="center" android:layout_marginTop="2dp" android:layout_marginBottom="6dp">
             <TextView android:id="@+id/wNext" android:layout_width="wrap_content" android:layout_height="wrap_content"
                 android:textSize="16dp" android:textColor="#FFFFFF" android:layout_marginEnd="8dp" android:text="الفجر بعد"/>
-            <Chronometer android:id="@+id/wCount" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            <Chronometer android:id="@+id/wCount" android:fontFamily="@font/w_digits" android:layout_width="wrap_content" android:layout_height="wrap_content"
                 android:textSize="19dp" android:textStyle="bold" android:textColor="#E0B04E" android:layoutDirection="ltr"/>
         </LinearLayout>
         <LinearLayout android:id="@+id/wGrid" android:layout_width="match_parent" android:layout_height="wrap_content"
