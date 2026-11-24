@@ -77,6 +77,7 @@ public final class Engine {
     final PrayCalc.Method method;
     final boolean hanafi;
     final long after, every;
+    final boolean once;   // "بدون تكرار": one reminder per prayer
     final JSONObject marks;
     long install;
 
@@ -96,7 +97,9 @@ public final class Engine {
         String asr = set.optString("asr", "auto");
         hanafi = "auto".equals(asr) ? PrayCalc.hanafiForCountry(loc.optString("cc")) : "hanafi".equals(asr);
         after = set.optLong("after", 15) * MIN;
-        every = Math.max(5, set.optLong("every", 15)) * MIN;
+        long ev = set.optLong("every", 15);
+        once = ev <= 0;
+        every = Math.max(5, ev) * MIN;
         marks = st.obj("marks");
         install = st.getLong("install", 0);
         if (install == 0) { install = System.currentTimeMillis(); st.putLong("install", install); }
@@ -359,7 +362,7 @@ public final class Engine {
         } else if (!quiet(now)) {
             boolean newOne = false;
             for (Item it : pend) if (!prevSig.contains(it.id() + ",")) { newOne = true; break; }
-            boolean due = newOne || now - lastFire >= every - 30000;
+            boolean due = newOne || (!once && now - lastFire >= every - 30000);
             if (fromAlarm && due) {
                 // with the app open the screen already shows it; count it as delivered
                 if (!screenOn) post(nm, pend, cur, false);
@@ -425,7 +428,7 @@ public final class Engine {
                     if (f > now + 1000 && f < best) best = f;
                 }
             }
-            if (!pend.isEmpty()) {
+            if (!pend.isEmpty() && !once) {
                 long f = Math.max(st.getLong("lastFire", 0) + every, now + 30000);
                 if (quiet(now)) f = Math.max(f, times(localDay(now))[0] + after);
                 if (f < best) best = f;
