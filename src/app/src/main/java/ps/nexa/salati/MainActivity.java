@@ -67,11 +67,13 @@ public class MainActivity extends Activity {
         } catch (Exception ignored) { }
 
         String crash = readCrash();
+        if (crash == null) crash = lastExit();
         if (crash != null) { safeScreen(crash); return; }
         start();
     }
 
     private void start() {
+        getSharedPreferences("boot", MODE_PRIVATE).edit().putLong("launching", System.currentTimeMillis()).commit();
         try {
             web = new WebView(this);
         } catch (Throwable t) {
@@ -80,6 +82,7 @@ public class MainActivity extends Activity {
                     stack(t));
             return;
         }
+        if (getSharedPreferences("boot", MODE_PRIVATE).getBoolean("soft", false)) web.setLayerType(View.LAYER_TYPE_SOFTWARE, null);
         web.setBackgroundColor(Color.parseColor(dark() ? "#0A0F1A" : "#F3F4F7"));
         web.setOverScrollMode(View.OVER_SCROLL_NEVER);
         WebSettings s = web.getSettings();
@@ -106,6 +109,11 @@ public class MainActivity extends Activity {
                 web = null;
                 main.post(() -> safeScreen(readCrash()));
                 return true;
+            }
+
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                getSharedPreferences("boot", MODE_PRIVATE).edit().putLong("launching", 0).apply();
             }
 
             @Override
@@ -177,6 +185,81 @@ public class MainActivity extends Activity {
         } catch (Throwable t) { return null; }
     }
 
+    /** Why did the last run end? Catches what our own handler cannot (native/WebView crashes, the system killing us at start). */
+    private String lastExit() {
+        android.content.SharedPreferences bp = getSharedPreferences("boot", MODE_PRIVATE);
+        long launching = bp.getLong("launching", 0);
+        StringBuilder r = new StringBuilder();
+        boolean bad = false;
+        try {
+            if (Build.VERSION.SDK_INT >= 30) {
+                android.app.ActivityManager am = (android.app.ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
+                List<android.app.ApplicationExitInfo> l = am.getHistoricalProcessExitReasons(getPackageName(), 0, 3);
+                long seen = bp.getLong("exitSeen", 0);
+                if (l != null && !l.isEmpty()) {
+                    android.app.ApplicationExitInfo e = l.get(0);
+                    if (e.getTimestamp() > seen) {
+                        bp.edit().putLong("exitSeen", e.getTimestamp()).commit();
+                        int why = e.getReason();
+                        boolean crashy = why == android.app.ApplicationExitInfo.REASON_CRASH
+                                || why == android.app.ApplicationExitInfo.REASON_CRASH_NATIVE
+                                || why == android.app.ApplicationExitInfo.REASON_ANR
+                                || why == android.app.ApplicationExitInfo.REASON_INITIALIZATION_FAILURE;
+                        if (crashy || launching > 0) {
+                            bad = true;
+                            r.append("exit: reason=").append(why).append(" (").append(reasonName(why)).append(")")
+                                    .append(" status=").append(e.getStatus())
+                                    .append(" importance=").append(e.getImportance())
+                                    .append(" pss=").append(e.getPss() / 1024).append("MB")
+                                    .append(" process=").append(e.getProcessName()).append('\n')
+                                    .append("desc: ").append(e.getDescription()).append('\n');
+                            if (launching > 0) r.append("died before the page finished loading\n");
+                            r.append(trace(e));
+                        }
+                    }
+                }
+            }
+        } catch (Throwable t) { r.append("exit info error: ").append(t).append('\n'); }
+        if (!bad && launching > 0) { bad = true; r.append("the app stopped while starting (no system details on this Android)\n"); }
+        bp.edit().putLong("launching", 0).commit();
+        if (!bad) return null;
+        String v = "?";
+        try { v = getPackageManager().getPackageInfo(getPackageName(), 0).versionName; } catch (Throwable ignored) { }
+        return "صلاتي " + v + " · " + Build.MANUFACTURER + " " + Build.MODEL + " · Android " + Build.VERSION.RELEASE
+                + " (API " + Build.VERSION.SDK_INT + ")\nWebView: " + webViewInfo()
+                + (bp.getBoolean("soft", false) ? " · soft" : "") + "\n\n" + r;
+    }
+
+    private static String reasonName(int r) {
+        switch (r) {
+            case 4: return "CRASH"; case 5: return "CRASH_NATIVE"; case 6: return "ANR"; case 7: return "INIT_FAILURE";
+            case 2: return "SIGNALED"; case 3: return "LOW_MEMORY"; case 1: return "EXIT_SELF"; case 9: return "EXCESSIVE_RESOURCE";
+            case 10: return "USER_REQUESTED"; case 11: return "USER_STOPPED"; case 12: return "DEPENDENCY_DIED"; case 13: return "OTHER";
+            case 8: return "PERMISSION_CHANGE"; case 14: return "FREEZER"; case 15: return "PACKAGE_STATE_CHANGE"; case 16: return "PACKAGE_UPDATED";
+            default: return "UNKNOWN";
+        }
+    }
+
+    /** readable text from the system's crash trace (a tombstone is binary: keep the words) */
+    private static String trace(android.app.ApplicationExitInfo e) {
+        if (Build.VERSION.SDK_INT < 30) return "";
+        try (InputStream in = e.getTraceInputStream()) {
+            if (in == null) return "";
+            ByteArrayOutputStream bo = new ByteArrayOutputStream();
+            byte[] b = new byte[8192]; int n, tot = 0;
+            while ((n = in.read(b)) > 0 && tot < 400000) { bo.write(b, 0, n); tot += n; }
+            byte[] d = bo.toByteArray();
+            StringBuilder out = new StringBuilder("\ntrace:\n"), w = new StringBuilder();
+            for (byte x : d) {
+                int c = x & 0xff;
+                if (c >= 32 && c < 127) w.append((char) c);
+                else { if (w.length() >= 6) { out.append(w).append('\n'); if (out.length() > 6000) break; } w.setLength(0); }
+            }
+            if (w.length() >= 6 && out.length() <= 6000) out.append(w);
+            return out.toString();
+        } catch (Throwable t) { return "\ntrace error: " + t; }
+    }
+
     static String webViewInfo() {
         try {
             if (Build.VERSION.SDK_INT >= 26) {
@@ -221,7 +304,12 @@ public class MainActivity extends Activity {
         l.addView(b, lp);
         android.widget.Button go = new android.widget.Button(this);
         go.setText("افتح التطبيق");
-        go.setOnClickListener(v -> start());
+        go.setOnClickListener(v -> {
+            // stopped while starting: try again without the graphics card (some phones crash in it)
+            if (rep.contains("before the page") || rep.contains("while starting") || rep.contains("CRASH_NATIVE") || rep.contains("renderer gone"))
+                getSharedPreferences("boot", MODE_PRIVATE).edit().putBoolean("soft", true).commit();
+            start();
+        });
         l.addView(go, new android.widget.LinearLayout.LayoutParams(-2, -2));
         android.widget.TextView small = new android.widget.TextView(this);
         small.setText(rep.length() > 600 ? rep.substring(0, 600) + "…" : rep);
