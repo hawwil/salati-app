@@ -10,8 +10,8 @@ android {
         applicationId "ps.nexa.salati"
         minSdk 24
         targetSdk 36
-        versionCode 29
-        versionName "2.3.6"
+        versionCode 30
+        versionName "2.3.7"
     }
 
     signingConfigs {

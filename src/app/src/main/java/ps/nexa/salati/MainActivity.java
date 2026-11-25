@@ -387,7 +387,13 @@ public class MainActivity extends Activity {
 
     private android.widget.FrameLayout topBar, bottomBar;
 
+    /** colours the status / navigation bars; never allowed to take the app down (it did on some Android 13 phones) */
     private void bars() {
+        try { barsUnsafe(); } catch (Throwable ignored) { }
+    }
+
+    private void barsUnsafe() {
+        getWindow().getDecorView();   // make sure the window's views exist before asking for its controller
         boolean d = dark();
         int top = Color.parseColor(d ? "#0B1830" : "#13294B"), bot = Color.parseColor(d ? "#121A2A" : "#FFFFFF");
         if (topBar != null) topBar.setBackgroundColor(top);
